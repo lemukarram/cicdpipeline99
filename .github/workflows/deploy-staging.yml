@@ -2,19 +2,16 @@ name: Deploy to Staging
 
 on:
   push:
-    branches: [ master ]
-
-concurrency:
-  group: staging-deploy
-  cancel-in-progress: true
+    branches:
+      - master   # Deploy when master branch is updated
 
 jobs:
-  deploy-staging:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - name: Create release tarball
         run: |
@@ -27,57 +24,39 @@ jobs:
               --ignore-failed-read \
               -czf "$RELEASE" .
 
-      - name: Add SSH host key
+      - name: Setup SSH key
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
         run: |
+          echo "$SSH_KEY" > key.pem
+          chmod 600 key.pem
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          echo "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Copy tarball to server
+      - name: Upload release to server
         env:
-          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          RELEASE: ${{ env.RELEASE }}
         run: |
-          echo "$SSH_KEY" > key.pem
-          chmod 600 key.pem
-          scp -P ${{ secrets.SSH_PORT }} -i key.pem "$RELEASE" ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/
+          scp -P $SSH_PORT -i key.pem $RELEASE $SSH_USER@$SSH_HOST:/tmp/
 
-      - name: Deploy on server (staging)
+      - name: Deploy on staging server
         env:
-          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          RELEASE: ${{ env.RELEASE }}
           STAGING_PATH: ${{ secrets.STAGING_PATH }}
         run: |
-          echo "$SSH_KEY" > key.pem
-          chmod 600 key.pem
-          ssh -p ${{ secrets.SSH_PORT }} -i key.pem ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} bash -s << 'EOF'
-          set -euo pipefail
-
-          RELEASE_NAME="${RELEASE:-release-$(date +%Y%m%d%H%M%S).tgz}"
-          REL_DIR="releases/$(date +%Y%m%d%H%M%S)"
-
-          cd "$STAGING_PATH"
-
-          mkdir -p "$REL_DIR"
-          tar -xzf "/tmp/${RELEASE_NAME}" -C "$REL_DIR"
-
-          # Link shared resources (create if missing)
-          [ -f shared/.env ] || touch shared/.env
-          [ -d shared/uploads ] || mkdir -p shared/uploads
-
-          # Symlink shared items into the new release (adjust if needed)
-          ln -sfn "$STAGING_PATH/shared/.env" "$REL_DIR/.env"
-          ln -sfn "$STAGING_PATH/shared/uploads" "$REL_DIR/uploads"
-
-          # (Optional) PHP syntax check a key file
-          if command -v php >/dev/null 2>&1; then
-            php -l "$REL_DIR/index.php" || true
-          fi
-
-          # Atomic switch to new release
-          ln -sfn "$STAGING_PATH/$REL_DIR" "$STAGING_PATH/current"
-
-          # Retain last 5 releases
-          ls -1dt releases/* | tail -n +6 | xargs -r rm -rf
-
-          # Cleanup uploaded tarball
-          rm -f "/tmp/${RELEASE_NAME}"
-          EOF
+          ssh -p $SSH_PORT -i key.pem $SSH_USER@$SSH_HOST "
+            set -e
+            RELEASE_DIR=\$STAGING_PATH/releases/$(date +%Y%m%d%H%M%S)
+            mkdir -p \$RELEASE_DIR
+            tar -xzf /tmp/$RELEASE -C \$RELEASE_DIR
+            rm /tmp/$RELEASE
+            ln -sfn \$RELEASE_DIR \$STAGING_PATH/current
+          "
