@@ -20,7 +20,11 @@ jobs:
         run: |
           RELEASE="release-$(date +%Y%m%d%H%M%S).tgz"
           echo "RELEASE=$RELEASE" >> $GITHUB_ENV
-          tar --exclude-from=deploy-exclude.txt -czf "$RELEASE" .
+          tar --exclude='.git' \
+              --exclude='.github' \
+              --exclude='deploy-exclude.txt' \
+              --warning=no-file-changed \
+              -czf "$RELEASE" .
 
       - name: Add SSH host key
         run: |
