@@ -54,6 +54,7 @@ jobs:
         run: |
           ssh -p $SSH_PORT -i key.pem $SSH_USER@$SSH_HOST "
             set -e
+            export APP_ENV=staging   # 👈 define environment
             RELEASE_DIR=$STAGING_PATH/releases/$(date +%Y%m%d%H%M%S)
             mkdir -p \$RELEASE_DIR
             tar -xzf /tmp/$RELEASE -C \$RELEASE_DIR
