@@ -21,6 +21,7 @@ jobs:
               --exclude='.github' \
               --exclude='deploy-exclude.txt' \
               --warning=no-file-changed \
+              --ignore-failed-read \
               -czf "$RELEASE" .
 
       - name: Upload package to server
