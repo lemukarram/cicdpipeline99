@@ -1,5 +1,14 @@
 <?php
 // Detect environment (default = local)
+
+if (file_exists(__DIR__ . '/.env')) {
+    foreach (file(__DIR__ . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        if (strpos($line, '=') !== false) {
+            putenv(trim($line));
+        }
+    }
+}
+
 $environment = getenv('APP_ENV') ?: 'local';
 
 // Map environments to files
