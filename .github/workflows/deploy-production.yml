@@ -24,6 +24,17 @@ jobs:
               --ignore-failed-read \
               -czf "$RELEASE" .
 
+      - name: Setup SSH key
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          echo "$SSH_KEY" > key.pem
+          chmod 600 key.pem
+          mkdir -p ~/.ssh
+          echo "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      
       - name: Upload package to server
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
@@ -31,8 +42,6 @@ jobs:
           SSH_PORT: ${{ secrets.SSH_PORT }}
           RELEASE: ${{ env.RELEASE }}
         run: |
-          echo "$SSH_KEY" > key.pem
-          chmod 600 key.pem
           scp -P $SSH_PORT -i key.pem "$RELEASE" $SSH_USER@$SSH_HOST:/tmp/
 
       - name: Deploy on production server
